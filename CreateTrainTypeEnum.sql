@@ -1,0 +1,1 @@
+CREATE TYPE TRAIN_CATEGORY AS ENUM ('express', 'freight', 'signature', 'suburban');
