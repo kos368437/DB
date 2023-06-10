@@ -13,9 +13,32 @@ seconds = ['станица', 'заимка', 'деревня', 'речка', 'К
 
 train_categories = ['express', 'freight', 'signature', 'suburban']
 
+surname = ['Иванов', "Петров", "Сидоров", "Бочаров", "Строганов", "Смирнов", "Попов", "Дубнов", "Кривощёков",
+           "Александров", "Лебедев", "Тополев"]
+alphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЫЭЮЯ"
+
 TRAINS_CNT = 1000
 STATIONS_CNT = 180
 TIMETABLE_CNT = 7000
+PASSENGERS_CNT = 75000
+
+
+def gen_name():
+    name = surname[random.randint(0, len(surname) - 1)]
+    if random.randint(0, 1) == 0:
+        name += 'а'
+    name += ' ' + alphabet[random.randint(0, len(alphabet) - 1)] + '. ' + alphabet[
+        random.randint(0, len(alphabet) - 1)] + '.'
+    return name
+
+
+def gen_passengers():
+    passengers = []
+    for id in range(PASSENGERS_CNT):
+        name = gen_name()
+        birth_date = gen_random_time_between(datetime.datetime(1950, 1, 1), datetime.datetime(2005, 1, 1))
+        passengers.append((id, name, birth_date))
+    return passengers
 
 
 def generate_stations():
@@ -108,13 +131,15 @@ def generate_distances():
                 id += 1
     return distances_list, distances_dict
 
+
 def get_distance(frm, to, distances_dict: dict):
     a = min(frm, to)
     b = max(frm, to)
     if a == b:
         return 0
     else:
-        return distances_dict[(a,b)]
+        return distances_dict[(a, b)]
+
 
 def gen_trains(routes, route_nodes: list):
     trains = []
@@ -127,12 +152,15 @@ def gen_trains(routes, route_nodes: list):
         trains.append((i, category, capacity, base_station, rand_route))
     return trains
 
-def gen_random_time_between(frm:datetime, to:datetime):
+
+def gen_random_time_between(frm: datetime, to: datetime):
     mintime_ts = int(time.mktime(frm.timetuple()))
     maxtime_ts = int(time.mktime(to.timetuple()))
 
     random_ts = random.randint(mintime_ts, maxtime_ts)
     return datetime.datetime.fromtimestamp(random_ts)
+
+
 def gen_time():
     MINTIME = datetime.datetime(2010, 1, 1, 00, 00, 00)
     MAXTIME = datetime.datetime(2023, 6, 14, 23, 59, 59)
@@ -142,20 +170,44 @@ def gen_time():
     random_ts = random.randint(mintime_ts, maxtime_ts)
     return datetime.datetime.fromtimestamp(random_ts)
 
-def move_time(time:datetime, shift_minutes: int):
+
+def move_time(time: datetime, shift_minutes: int):
     return time + datetime.timedelta(minutes=shift_minutes)
+
+
+def add_N_tickets(N, table_frm_id, tickets_pool: list, tickets_cnt, passengers):
+    l_tickets_cnt = tickets_cnt
+    for _ in range(N):
+        pass_id = passengers[random.randint(0, len(passengers) - 1)][0]
+        tickets_num = l_tickets_cnt
+        l_tickets_cnt += 1
+        tickets_pool.append((tickets_num, pass_id, table_frm_id))
+    return l_tickets_cnt
+
+
+def pop_N_tickets(N, table_to_id, tickets_pool):
+    res = []
+    for _ in range(N):
+        ticket = tickets_pool.pop(random.randint(0, len(tickets_pool) - 1)) + (table_to_id,)
+        res.append(ticket)
+    return res
+
+
 def gen_timetable(trains, route_nodes, distences_dict):
     timetable = []
     id = 0
     delay_id = 0
     delays = []
     trip_num = 0
+    tickets_cnt = 0
+    passengers = gen_passengers()
+    tickets = []
     for _ in range(TIMETABLE_CNT):
         rand_train = trains[random.randint(0, len(trains) - 1)]
         route_num = rand_train[4]
         capacity = rand_train[2]
         stations_list = [(node[2], node[3]) for node in filter(lambda x: x[1] == route_num, route_nodes)]
-        stations_list.sort(key= lambda x: x[1])
+        stations_list.sort(key=lambda x: x[1])
         stations_list = [item[0] for item in stations_list]
         forward = random.randint(0, 1) == 0
         if not forward:
@@ -165,42 +217,50 @@ def gen_timetable(trains, route_nodes, distences_dict):
         start_time = gen_time()
         dep_time = start_time
         in_pass = random.randint(0, capacity)
+
+        tickets_pool = []
+        tickets_cnt = add_N_tickets(in_pass, id, tickets_pool, tickets_cnt, passengers)
+
         out_pass = 0
         total_passengers = in_pass
 
-        timetable.append((id, rand_train[0], stations_list[0], forward, in_pass, 0, None, dep_time, total_passengers, trip_num))
+        timetable.append(
+            (id, rand_train[0], stations_list[0], forward, in_pass, 0, None, dep_time, total_passengers, trip_num))
         id += 1
         iter_stations = stations_list[1:-1]
         for i in range(len(iter_stations)):
-
             out_pass = random.randint(0, total_passengers)
+            tickets.extend(pop_N_tickets(out_pass, id, tickets_pool))
             total_passengers -= out_pass
             in_pass = random.randint(0, capacity - total_passengers)
+            tickets_cnt = add_N_tickets(in_pass, id, tickets_pool, tickets_cnt, passengers)
             total_passengers += in_pass
 
             distance = get_distance(iter_stations[i - 1], iter_stations[i], distances_dict)
-            time_to_arrive = ceil(distance / 60)
+            time_to_arrive = distance
             arr_time = move_time(dep_time, time_to_arrive + random.randint(0, 5))
             dep_time = move_time(arr_time, random.randint(5, 45))
 
-            timetable.append((id, rand_train[0], iter_stations[i], forward, in_pass, out_pass, arr_time, dep_time, total_passengers, trip_num))
+            timetable.append((id, rand_train[0], iter_stations[i], forward, in_pass, out_pass, arr_time, dep_time,
+                              total_passengers, trip_num))
             id += 1
 
         distance = get_distance(stations_list[-2], stations_list[-1], distances_dict)
         time_to_arrive = distance
         finish_time = move_time(dep_time, time_to_arrive + random.randint(0, 5))
-        timetable.append((id, rand_train[0], stations_list[-1], forward, 0, total_passengers, finish_time, None, 0, trip_num))
+        tickets.extend(pop_N_tickets(total_passengers, id, tickets_pool))
+        timetable.append(
+            (id, rand_train[0], stations_list[-1], forward, 0, total_passengers, finish_time, None, 0, trip_num))
         id += 1
 
         trip_num += 1
         if random.randint(0, 1) == 0:
-            delay_time = datetime.timedelta(minutes=random.randint(5,45))
-            delays.append((delay_id, rand_train[0], forward, gen_random_time_between(start_time, finish_time), delay_time))
+            delay_time = datetime.timedelta(minutes=random.randint(5, 45))
+            delays.append(
+                (delay_id, rand_train[0], forward, gen_random_time_between(start_time, finish_time), delay_time))
             delay_id += 1
 
-    return timetable, delays
-
-
+    return timetable, delays, passengers, tickets
 
 
 with open('stations.csv', 'w', newline='') as f:
@@ -219,13 +279,20 @@ with open('routes.csv', 'w', newline='') as f, open('route_nodes.csv', 'w', newl
     routes, route_nodes = gen_routes_and_route_nodes(distances_dict)
     routes_writer.writerows(routes)
     route_nodes_writer.writerows(route_nodes)
-with open('trains.csv', 'w', newline='') as f, open('timetable.csv', 'w', newline='') as g, open('delays.csv', 'w', newline='') as h:
+with open('trains.csv', 'w', newline='') as f, open('timetable.csv', 'w', newline='') as g, open('delays.csv', 'w',
+                                                                                                 newline='') as h, \
+        open('passenger.csv', 'w', newline='') as k, open('ticket.csv', 'w', newline='') as l:
     trains_writer = csv.writer(f)
     timetable_writer = csv.writer(g)
     delays_writer = csv.writer(h)
+    pass_writer = csv.writer(k)
+    ticket_writer = csv.writer(l)
+
     trains = gen_trains(routes, route_nodes)
-    timetable, delays = gen_timetable(trains, route_nodes, distances_dict)
+    timetable, delays, passengers, tickets = gen_timetable(trains, route_nodes, distances_dict)
 
     trains_writer.writerows(trains)
     timetable_writer.writerows(timetable)
     delays_writer.writerows(delays)
+    pass_writer.writerows(passengers)
+    ticket_writer.writerows(tickets)
