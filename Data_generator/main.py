@@ -36,7 +36,7 @@ def gen_passengers():
     passengers = []
     for id in range(PASSENGERS_CNT):
         name = gen_name()
-        birth_date = gen_random_time_between(datetime.datetime(1950, 1, 1), datetime.datetime(2005, 1, 1))
+        birth_date = gen_random_time_between(datetime.datetime(1950, 1, 1), datetime.datetime(2005, 1, 1).date())
         passengers.append((id, name, birth_date))
     return passengers
 

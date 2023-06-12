@@ -10,6 +10,8 @@ CREATE OR REPLACE FUNCTION tt_check_arr_time() RETURNS TRIGGER AS $tt_check_arr_
         tt_curs CURSOR (tt_trip_num int, rn_m_num int, rn_order int, tt_t_num int) FOR SELECT tt.* FROM route_node r_n INNER JOIN timetable tt ON r_n.m_num = rn_m_num and r_n.order_ > rn_order and tt.trip_num = tt_trip_num and tt.t_num = tt_t_num and r_n.station_id = tt.station_id ;
         INTERVAL_CONST interval := make_interval(hours := 1);
         DEP_INTERVAL_CONST interval := make_interval(mins := 15);
+
+        dep_arr_interval interval;
     BEGIN
         IF new.forward THEN
             step_forward := 1;
@@ -33,11 +35,15 @@ CREATE OR REPLACE FUNCTION tt_check_arr_time() RETURNS TRIGGER AS $tt_check_arr_
             ELSE
                 common_time_interval := make_interval(secs := common_time_interval_val);
             end if;
+            dep_arr_interval := new.dep_time - new.arr_time;
+            if extract(epoch from dep_arr_interval) < 0 then
+                dep_arr_interval := DEP_INTERVAL_CONST;
+            end if;
             new.arr_time := prev_tt.dep_time + common_time_interval;
             if new.dep_time is not null then
                 new.dep_time := new.dep_time + common_time_interval;
                 if extract(epoch from new.dep_time - new.arr_time) < 0 then
-                    new.dep_time := new.arr_time + DEP_INTERVAL_CONST;
+                    new.dep_time := new.arr_time + dep_arr_interval;
                 end if;
             end if;
 --         prev_time := new.dep_time;
